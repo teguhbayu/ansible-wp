@@ -1,4 +1,55 @@
 - hosts: wordpress
+  vars:
+    wp_user: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      30363337643030313361656361366334656431653761326265663532326231613031666532623663
+      6236393736633639303665363231653864626534386430330a376435643965316335316136366535
+      66633831303335383266656331616361303636616661343666333633313161383463333930316539
+      6533656236666436650a656265343763373631313861643238373936613361663764346238396633
+      3433
+    wp_pass: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      34333665643131343966616135353230613235663633396332346465393163346437653939373739
+      6533333838646234653163373134653632653734613931340a616464383831316661366330666235
+      65653730643930643839636637353936643336316230313866343366383333303063383134643564
+      3464393165626362390a333037666637303661643164373231373130656533326137633739663863
+      6266
+    wp_db: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      36316138373064616662643562346131363538653534623663623739623637343938323961366432
+      6239386234653233373830346438343432616332653061300a303736376532643266326162313830
+      38383839623166393135613538623861613064636333383264383730323534613565333766323532
+      3430353461646438310a656632326339656335323533303336363937343064383535633762396236
+      3536
+    wp_host: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      34663538663531326462396335326532626161353430356662643931356134653165383866303139
+      6331313437356265623732376232643736653861383366330a363466376536623166323964373363
+      35393335633163666533323666303633343832633632653034663366616636373032396363323562
+      6637353733366237380a643236646536626239663361323635393062323539656532623531396136
+      3039
+    blog_user: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      33353731626639666537616666373564633065323864643664326266616232623539623661616264
+      3965396264303030386530626431626365616235303139620a316130383065373263313832313636
+      66666232393464323464353832336533393766356165393566373432636265343535333034323337
+      6637343165613939330a613363613138616262656463656632656531356439666638386534336230
+      3733
+    blog_pass: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      63626261393936333562663330386635323234373935396165346361323830623964633733636634
+      6563396132306137393638646439333066366666313062640a656436306234646433383032623639
+      64613332346636613531306165353661646635386538383763626435366331383638303039633962
+      3264323162346363360a356362376339646532313831623339616533616237326337346632646662
+      3966
+    blog_db: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      33343066326231653863366230663932326430303230306536656331393738343731303430376336
+      3836623764613137633238363332376166386564633964330a353664636139313639366330666461
+      30353134336335373565643634633462646163633461343434363835636537653439303739326364
+      6631366138386534310a656434366635363734343663353462633638326134343864376233613338
+      6332
+
   become: yes
 
   tasks:
@@ -37,8 +88,8 @@
 
     - name: Create MySQL admin user
       mysql_user:
-        name: wpadmin
-        password: admin123#
+        name: "{{ wp_user }}"
+        password: "{{ wp_pass }}"
         priv: "*.*:ALL,GRANT"
         host: "%"
         state: present
@@ -46,10 +97,10 @@
 
     - name: Create WordPress database
       mysql_db:
-        name: wpdb
+        name: "{{ wp_db }}"
         state: present
-        login_user: wpadmin
-        login_password: admin123#
+        login_user: "{{ wp_user }}"
+        login_password: "{{ wp_pass }}"
 
     - name: Download WordPress
       get_url:
@@ -73,10 +124,13 @@
         regexp: "{{ item.regexp }}"
         line: "{{ item.line }}"
       loop:
-        - { regexp: "DB_NAME", line: "define('DB_NAME', 'wpdb');" }
-        - { regexp: "DB_USER", line: "define('DB_USER', 'wpadmin');" }
-        - { regexp: "DB_PASSWORD", line: "define('DB_PASSWORD', 'admin123#');" }
-        - { regexp: "DB_HOST", line: "define('DB_HOST', 'localhost');" }
+        - { regexp: "DB_NAME", line: "define('DB_NAME', '{{ wp_db }}');" }
+        - { regexp: "DB_USER", line: "define('DB_USER', '{{ wp_user }}');" }
+        - {
+            regexp: "DB_PASSWORD",
+            line: "define('DB_PASSWORD', '{{ wp_pass }}');",
+          }
+        - { regexp: "DB_HOST", line: "define('DB_HOST', '{{ wp_host }}');" }
 
     - name: Update Apache VirtualHost for WordPress
       replace:
@@ -105,7 +159,7 @@
         name: apache2
         state: present
 
-    - name: Rmake sure and enable apache
+    - name: make sure and enable apache
       service:
         name: apache2
         state: started
@@ -133,8 +187,8 @@
 
     - name: Create MySQL admin user
       mysql_user:
-        name: cyber
-        password: pass2023
+        name: "{{ blog_user }}"
+        password: "{{ blog_pass }}"
         priv: "*.*:ALL,GRANT"
         host: "%"
         state: present
@@ -142,10 +196,10 @@
 
     - name: Create WordPress database
       mysql_db:
-        name: cyber23
+        name: "{{ blog_db }}"
         state: present
-        login_user: cyber
-        login_password: pass2023
+        login_user: "{{ blog_user }}"
+        login_password: "{{ blog_pass }}"
 
     - name: Clone a repo with separate git directory
       ansible.builtin.git:
@@ -155,7 +209,7 @@
         version: main
 
     - name: Import DB
-      shell: mysql cyber23 < /var/www/webvuln/db.sql
+      shell: mysql {{ blog_db }} < /var/www/webvuln/db.sql
 
     - name: Update Apache VirtualHost for webvuln
       replace:
